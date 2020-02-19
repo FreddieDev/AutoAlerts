@@ -22,6 +22,8 @@ OnWinActiveChange(hWinEventHook, vEvent, hWnd)
 ; Vars
 global SettingsName := "AutoAlerts.ini"
 global LastInitWinID :=
+global AutoClickActionTarget :=
+global AutoClickActionWHnd :=
 
 
 ; Cleanup tray menu items
@@ -73,11 +75,11 @@ StartAlertRegistration(winID) {
 ; to identify the window across launches
 ; Properties used include the process (exe) name, title, classname and text
 GetWinSaveName(winID) {
-	WinGetTitle, WinTitle, ahk_id %winID%
-	WinGetClass, WinClass, ahk_id %winID%
-	WinGetText, WinText, ahk_id %winID%
 	WinGet, WinProcName, ProcessName, ahk_id %winID%
-	SaveName := WinProcName . WinTitle . WinClass . WinText
+	WinGetClass, WinClass, ahk_id %winID%
+	WinGetTitle, WinTitle, ahk_id %winID%
+	WinGetText, WinText, ahk_id %winID%
+	SaveName := WinProcName . WinClass . WinTitle . WinText ; Note title and text can take time to load and may be empty
 
 	; Strip line breaks and white-space in string (these will break ini save file category titles)
 	StringReplace, SaveName, SaveName, `n,,All
@@ -124,6 +126,7 @@ RunSavedAction(winID) {
 	}
 
 	WinSaveName := GetWinSaveName(winID)
+
 	; MsgBox, title: %windownTitle% `r`n save name: %WinSaveName%
 
 	; IniRead, outputVar, ini settings file, category, setting name, default value
@@ -135,6 +138,7 @@ RunSavedAction(winID) {
 	IniRead, shouldDismiss, %SettingsName%, %WinSaveName%, ShouldDismiss, 0
 	if (shouldDismiss) {
 		WinClose, ahk_id %winID%
+		SoundPlay, %A_WinDir%\media\Speech Misrecognition.wav
 		return
 	}
 
@@ -143,8 +147,9 @@ RunSavedAction(winID) {
 		IniRead, actionToClick, %SettingsName%, %WinSaveName%, ActionToClick, ""
 
 		if (actionToClick != "") {
-			MsgBox, %actionToClick%
-			ControlClick, %actionToClick%, ahk_id %winID% ; Click control
+			ControlClick, %actionToClick%, ahk_id %winID%,,,,NA ; Click control
+			SoundPlay, %A_WinDir%\media\Speech Misrecognition.wav
+
 			return
 		}
 	}
@@ -152,8 +157,6 @@ RunSavedAction(winID) {
 
 
 Return
-
-
 
 
 ~RShift::
@@ -179,7 +182,7 @@ RegisterAutoSelect:
 	if (WinSelectedControl = "") {
 		return
 	}
-
+	
 	Hotkey, ~$LShift, RegisterAutoSelect, Off ; Disable hotkey
 	SaveAutoAlertSettingsForWindow(LastInitWinID, 1, 0, 1, WinSelectedControl) ; Save control
 	RunSavedAction(LastInitWinID) ; Run the action
@@ -202,7 +205,7 @@ AutoSelect:
 	MsgBox, 1, AutoAlerts, %MsgTxt%
 
 	IfMsgBox, OK
-		Hotkey, ~$LShift, RegisterAutoSelect
+		Hotkey, ~$LShift, RegisterAutoSelect, On
 
 	Gui, Destroy
 	return
