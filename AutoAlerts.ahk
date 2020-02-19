@@ -5,19 +5,23 @@ SendMode Input  ; Recommended for new scripts due to its superior speed and reli
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
 
 
+OnWinActiveChange(hWinEventHook, vEvent, hWnd)
+{
+	;EVENT_SYSTEM_FOREGROUND := 0x3
+	static _ := DllCall("user32\SetWinEventHook", UInt,0x3, UInt,0x3, Ptr,0, Ptr,RegisterCallback("OnWinActiveChange"), UInt,0, UInt,0, UInt,0, Ptr)
+	DetectHiddenWindows, On
+
+	; Display debugging tooltip of currently focused window's handle
+	; WinGetClass, vWinClass, % "ahk_id " hWnd
+	; ToolTip, % vWinClass
+
+	winHand := WinExist("A")
+	RunSavedAction(winHand)
+}
+
 ; Vars
 global SettingsName := "AutoAlerts.ini"
 global LastInitWinID :=
-
-
-
-; Link Window change events to AHK handler
-Gui +LastFound
-hWnd := WinExist()
-DllCall( "RegisterShellHookWindow", UInt,hWnd )
-MsgNum := DllCall( "RegisterWindowMessage", Str,"SHELLHOOK" )
-OnMessage( MsgNum, "ShellMessage" )
-
 
 
 ; Cleanup tray menu items
@@ -67,13 +71,13 @@ StartAlertRegistration(winID) {
 
 ; Finds a window by its ID and uses this to compile a unique persistent way
 ; to identify the window across launches
-; Properties used include the title, classname and text
+; Properties used include the process (exe) name, title, classname and text
 GetWinSaveName(winID) {
 	WinGetTitle, WinTitle, ahk_id %winID%
 	WinGetClass, WinClass, ahk_id %winID%
 	WinGetText, WinText, ahk_id %winID%
-	; SaveName := WinTitle . WinClass . WinText
-	SaveName := WinTitle . WinClass
+	WinGet, WinProcName, ProcessName, ahk_id %winID%
+	SaveName := WinProcName . WinTitle . WinClass . WinText
 
 	; Strip line breaks and white-space in string (these will break ini save file category titles)
 	StringReplace, SaveName, SaveName, `n,,All
@@ -84,13 +88,24 @@ GetWinSaveName(winID) {
 	return SaveName
 }
 
+; Takes a window handle and makes a semi-unique string for humans to
+; easily read and understand the purpose of an AutoAlert setting
+GetHumanReadableName(winID) {
+	WinGetTitle, winTitle, ahk_id %winID%
+	WinGet, winProcName, ProcessName, ahk_id %winID%
+	return winProcName . " - " . winTitle
+}
+
+; Takes auto alert settings for a window and saves them to settings file
 SaveAutoAlertSettingsForWindow(winID, autoHandle, shouldDismiss, shouldDoAction:=0, actionToClick:="") {
 	global
 
 	WinSaveName := GetWinSaveName(winID)
+	ReadableName := GetHumanReadableName(winID)
 	
 	; IniWrite, value, ini settings file, category, setting name
 	; Here, each window and its auto settings are saved under the window's save name
+	IniWrite, %ReadableName%, %SettingsName%, %WinSaveName%, ReadableName 		; Human-readable string to represent the name of the auto-alert entry
 	IniWrite, %autoHandle%, %SettingsName%, %WinSaveName%, AutoHandle 			; Bool toggling entire auto settings for window
 	IniWrite, %shouldDismiss%, %SettingsName%, %WinSaveName%, ShouldDismiss		; Bool toggling if window should auto-close
 	IniWrite, %shouldDoAction%, %SettingsName%, %WinSaveName%, ShouldDoAction	; Bool toggling if a control should be auto-clicked
@@ -109,7 +124,7 @@ RunSavedAction(winID) {
 	}
 
 	WinSaveName := GetWinSaveName(winID)
-	MsgBox, title: %windownTitle% `r`n save name: %WinSaveName%
+	; MsgBox, title: %windownTitle% `r`n save name: %WinSaveName%
 
 	; IniRead, outputVar, ini settings file, category, setting name, default value
 	IniRead, autoHandle, %SettingsName%, %WinSaveName%, AutoHandle, 0
@@ -120,7 +135,6 @@ RunSavedAction(winID) {
 	IniRead, shouldDismiss, %SettingsName%, %WinSaveName%, ShouldDismiss, 0
 	if (shouldDismiss) {
 		WinClose, ahk_id %winID%
-		MsgBox, closed
 		return
 	}
 
@@ -129,8 +143,8 @@ RunSavedAction(winID) {
 		IniRead, actionToClick, %SettingsName%, %WinSaveName%, ActionToClick, ""
 
 		if (actionToClick != "") {
-			ControlGet, controlID, Hwnd,, actionToClick ; Find control's window handle by its text
-			ControlClick, ahk_id %controlID% ; Click control
+			MsgBox, %actionToClick%
+			ControlClick, %actionToClick%, ahk_id %winID% ; Click control
 			return
 		}
 	}
@@ -140,26 +154,6 @@ RunSavedAction(winID) {
 Return
 
 
-
-
-; Handler for window events
-; Fires func if a window is created or focused
-ShellMessage(wParam, lParam) {
-	If (wParam=1 or wParam=4) ;  HSHELL_WINDOWCREATED or HSHELL_WINDOWACTIVATED
-	{
-		NewID := lParam
-		SetTimer, NewWindowHandler, -1
-	}
-}
-
-
-; Used to automatically interact with new windows
-NewWindowHandler:
-	winHand := WinExist("A")
-	WinGetTitle, winTitle, A
-	SplashTextOn,,, %winTitle%
-	RunSavedAction(winHand)
-	return
 
 
 ~RShift::
@@ -179,6 +173,21 @@ WaitForRelease:
 
 
 
+RegisterAutoSelect:
+	; Get the currently focused control for the target window
+	ControlGetFocus, WinSelectedControl, ahk_id %LastInitWinID%
+	if (WinSelectedControl = "") {
+		return
+	}
+
+	Hotkey, ~$LShift, RegisterAutoSelect, Off ; Disable hotkey
+	SaveAutoAlertSettingsForWindow(LastInitWinID, 1, 0, 1, WinSelectedControl) ; Save control
+	RunSavedAction(LastInitWinID) ; Run the action
+
+	return
+
+
+
 
 
 AutoDismiss:
@@ -189,20 +198,20 @@ AutoDismiss:
 
 ; UNFINISHED
 AutoSelect:
-	MsgTxt := "To select the button for auto-select, use tab to focus it then hold RIGHT SHIFT"
+	MsgTxt := "To select the button for auto-select, use tab to focus it then tap LEFT SHIFT"
 	MsgBox, 1, AutoAlerts, %MsgTxt%
-	
-	ControlGetFocus, WinSelectedControl, ahk_id %LastInitWinID%
 
-	SaveAutoAlertSettingsForWindow(LastInitWinID, 1, 0, 1, "button1")
+	IfMsgBox, OK
+		Hotkey, ~$LShift, RegisterAutoSelect
 
-	RunSavedAction(LastInitWinID)
 	Gui, Destroy
 	return
 
 
 ; Add escape key hotkey to dismiss settings UI
 GuiEscape:
+	Gui, Destroy
+	return
 GuiClose:
 	Gui, Destroy
 	return
