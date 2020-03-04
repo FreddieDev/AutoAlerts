@@ -63,7 +63,7 @@ MenuExitScriptText := "Exit"
 Menu, Tray, Add, %MenuExitScriptText%, MenuHandler
 
 ; Set default menu option (double click tray icon to fire)
-Menu, Tray, Default, %MenuReloadScriptText%
+Menu, Tray, Default, %MenuChangeSettingsText%
 
 
 ; Shows or hides the advanced filtering options & button
@@ -129,7 +129,6 @@ ShowAutoAlertSetup() {
 	Gui Show, w483 h310, AutoAlerts - %targetName%
 	
 }
-ShowAutoAlertSetup()
 
 ; Runs setup to configure automatic handling of a specified window
 ; Returns true if setup successfully and false if setup failed/was cancelled
