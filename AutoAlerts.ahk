@@ -25,6 +25,11 @@ global SettingsName := "AutoAlerts.ini"
 global LastInitWinID :=
 global AutoClickActionTarget :=
 global AutoClickActionWHnd :=
+global RunOnSave :=
+
+; Control vars
+global NewAutoAlertAutoDismiss :=
+global NewAutoAlertAutoSelect :=
 
 
 ; Cleanup tray menu items
@@ -42,7 +47,6 @@ Menu, Tray, Add, %MenuAboutText%, MenuHandler
 ; Add change settings button
 MenuChangeSettingsText := "Change settings"
 Menu, Tray, Add, %MenuChangeSettingsText%, MenuHandler
-Menu, Tray, Default, %MenuChangeSettingsText%
 
 ; Creates a separator line
 Menu, Tray, Add
@@ -55,6 +59,8 @@ Menu, Tray, Add, %MenuReloadScriptText%, MenuHandler
 MenuExitScriptText := "Exit"
 Menu, Tray, Add, %MenuExitScriptText%, MenuHandler
 
+; Set default menu option (double click tray icon to fire)
+Menu, Tray, Default, %MenuChangeSettingsText%
 
 
 
@@ -66,26 +72,34 @@ ShowAutoAlertSetup() {
 
 	Gui Font, s9, Verdana
 	Gui Add, Text, x15 y33 w535 h18 +0x200, You held right shift for three seconds....
-	Gui Add, Text, x16 y96 w408 h54 +0x200, How would you like to handle these alerts in the future?
+	Gui Add, Text, x16 y96 w408 h18 +0x200, How would you like this window handled in the future?
 	
-	Gui Font, s10, Consolas
-	WinGetTitle, targetTitle, ahk_id %LastInitWinID%
-	Gui Add, Text, x15 y66 w535 h31 +0x200, Target: %targetTitle%
+	Gui Font, s12, Consolas
+	targetName := GetHumanReadableName(LastInitWinID)
+	Gui Add, Text, x15 y66 w535 h31 +0x200, Window: %targetName%
 
 	Gui Font
-	Gui Add, Button, x13 y168 w198 h52 gAutoDismiss, Close (click the cross)
-	Gui Add, Button, x229 y168 w198 h52 gAutoSelect, Auto-select an option
+	; Gui Add, Button, x13 y168 w188 h42 gAutoDismiss, Auto-dismiss (click the cross)
+	; Gui Add, Button, x229 y168 w178 h42 gAutoSelect, Auto-click a button
+	
+	Gui Add, Radio, x22 y118 w166 h23 vNewAutoAlertAutoDismiss +Checked, Auto-dismiss (click the cross)
+	Gui Add, Radio, x22 y138 w120 h23 vNewAutoAlertAutoSelect, Auto-click a button
+	
+	Gui Add, Button, x213 y205 w80 h23 gSaveNewAutoAlert, Save
+	Gui Add, Button, x301 y205 w80 h23 gSaveAndRunNewAutoAlert, Save and run
+	Gui Add, Button, x388 y205 w80 h23 gCancelNewAutoAlert, Cancel
 
-	Gui Show, w483 h254, AutoAlerts
+	Gui Show, w483 h244, AutoAlerts - %targetName%
 }
+
 
 ; Runs setup to configure automatic handling of a specified window
 ; Returns true if setup successfully and false if setup failed/was cancelled
 StartAlertRegistration(winID) {
-	; Check if the window has too many controls
-	; if (too many controls or no controls and cant close) {
-	; 	return false
-	; }
+	
+	if (!IsWindowValid(winID)) {
+		return
+	}
 	
 	LastInitWinID := winID
 	
@@ -141,13 +155,29 @@ SaveAutoAlertSettingsForWindow(winID, autoHandle, shouldDismiss, shouldDoAction:
 }
 
 
+; Returns true if window is valid for automation
+IsWindowValid(winID) {
+
+	; Check if the window has too many controls
+	; if (too many controls or no controls and cant close) {
+	; 	return false
+	; }
+	
+	; Stop running if window title includes "AutoAlerts"
+	WinGetTitle, windownTitle, ahk_id %winID%
+	if (InStr(windownTitle, "AutoAlerts")) {
+		return false
+	}
+	
+	return true
+}
+
+
 ; Uses a window's ID to see if it has an automated settings setup to interact with it
 RunSavedAction(winID) {
 	global
-
-	; Stop running if window title includes "AutoAlerts"
-	WinGetTitle, windownTitle, ahk_id %winID%
-	if (windownTitle = "AutoAlerts") {
+	
+	if (!IsWindowValid(winID)) {
 		return
 	}
 
@@ -182,6 +212,31 @@ RunSavedAction(winID) {
 }
 
 
+
+SaveNewAutoAlert() {
+	Gui, Submit ; Save the input from the user to each control's associated variable.
+	
+	if (NewAutoAlertAutoDismiss) {
+		SaveAutoAlertSettingsForWindow(LastInitWinID, 1, 1)
+		if (RunOnSave) {
+			RunSavedAction(LastInitWinID)
+		}
+	} else {
+		MsgTxt := "To select the button for auto-select, use tab to focus it then tap LEFT SHIFT"
+		MsgBox, 1, AutoAlerts, %MsgTxt%
+
+		IfMsgBox, OK
+		{
+			Hotkey, ~$LShift, RegisterAutoSelect, On
+		} else {
+			return
+		}
+	}
+	Gui, Destroy
+}
+
+
+
 Return
 
 
@@ -211,36 +266,27 @@ RegisterAutoSelect:
 	
 	Hotkey, ~$LShift, RegisterAutoSelect, Off ; Disable hotkey
 	SaveAutoAlertSettingsForWindow(LastInitWinID, 1, 0, 1, WinSelectedControl) ; Save control
-	RunSavedAction(LastInitWinID) ; Run the action
+	if (RunOnSave) {
+		RunSavedAction(LastInitWinID) ; Run the action
+	}
 
 	return
 
 
-
-
-
-AutoDismiss:
-	SaveAutoAlertSettingsForWindow(LastInitWinID, 1, 1)
-	Gui, Destroy
-	RunSavedAction(LastInitWinID)
+SaveNewAutoAlert:
+	RunOnSave := false
+	SaveNewAutoAlert()
 	return
-
-; UNFINISHED
-AutoSelect:
-	MsgTxt := "To select the button for auto-select, use tab to focus it then tap LEFT SHIFT"
-	MsgBox, 1, AutoAlerts, %MsgTxt%
-
-	IfMsgBox, OK
-		Hotkey, ~$LShift, RegisterAutoSelect, On
-
-	Gui, Destroy
+	
+SaveAndRunNewAutoAlert:
+	RunOnSave := true
+	SaveNewAutoAlert()
 	return
 
 
 ; Add escape key hotkey to dismiss settings UI
 GuiEscape:
-	Gui, Destroy
-	return
+CancelNewAutoAlert:
 GuiClose:
 	Gui, Destroy
 	return

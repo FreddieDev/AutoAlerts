@@ -52,6 +52,8 @@ class Settings {
 	}
 	
 	Change() {
+		GUI, Destroy ; Clear existing GUIs
+		
 		; Create the ListView with two columns, Name and Size:
 		Gui Font, s10 Norm, Microsoft Sans Serif
 		Gui, Add, Text,, Double click entries to delete them:
