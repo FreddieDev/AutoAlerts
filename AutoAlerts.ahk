@@ -75,11 +75,13 @@ StartAlertRegistration(winID) {
 ; to identify the window across launches
 ; Properties used include the process (exe) name, title, classname and text
 GetWinSaveName(winID) {
-	WinGet, WinProcName, ProcessName, ahk_id %winID%
+	WinGet, WinProcPath, ProcessPath, ahk_id %winID%
+	WinGet, WinControlList, ControlList, ahk_id %winID%
 	WinGetClass, WinClass, ahk_id %winID%
-	WinGetTitle, WinTitle, ahk_id %winID%
-	WinGetText, WinText, ahk_id %winID%
-	SaveName := WinProcName . WinClass . WinTitle . WinText ; Note title and text can take time to load and may be empty
+	; WinGetPos, WinXPos, WinYPos, WinWidth, WinHeight, ahk_id %winID%
+	; WinGetTitle, WinTitle, ahk_id %winID%
+	; WinGetText, WinText, ahk_id %winID%
+	SaveName := WinProcPath . WinClass . WinControlList ; Note title and text can take time to load and may be empty
 
 	; Strip line breaks and white-space in string (these will break ini save file category titles)
 	StringReplace, SaveName, SaveName, `n,,All
@@ -93,9 +95,9 @@ GetWinSaveName(winID) {
 ; Takes a window handle and makes a semi-unique string for humans to
 ; easily read and understand the purpose of an AutoAlert setting
 GetHumanReadableName(winID) {
-	WinGetTitle, winTitle, ahk_id %winID%
 	WinGet, winProcName, ProcessName, ahk_id %winID%
-	return winProcName . " - " . winTitle
+	WinGetTitle, winTitle, ahk_id %winID%
+	return StrReplace(winProcName, ".exe") . " (" . winTitle . ")"
 }
 
 ; Takes auto alert settings for a window and saves them to settings file
@@ -144,7 +146,7 @@ RunSavedAction(winID) {
 
 	IniRead, shouldDoAction, %SettingsName%, %WinSaveName%, ShouldDoAction, 0
 	if (shouldDoAction) {
-		IniRead, actionToClick, %SettingsName%, %WinSaveName%, ActionToClick, ""
+		IniRead, actionToClick, %SettingsName%, %WinSaveName%, ActionToClick, unbound
 
 		if (actionToClick != "") {
 			ControlClick, %actionToClick%, ahk_id %winID%,,,,NA ; Click control
