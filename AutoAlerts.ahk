@@ -4,6 +4,7 @@
 SendMode Input  ; Recommended for new scripts due to its superior speed and reliability.
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
 
+#Include lib\Settings.ahk
 
 OnWinActiveChange(hWinEventHook, vEvent, hWnd)
 {
@@ -32,18 +33,42 @@ Menu, Tray, Tip, AutoAlerts
 ; Change the tray icon
 MESSAGE_BOX_ICON := 3
 Menu, Tray, Icon, shell32.dll, %MESSAGE_BOX_ICON%
+Menu, Tray, NoStandard
+
+; Add credits button
+MenuAboutText := "About"
+Menu, Tray, Add, %MenuAboutText%, MenuHandler
+
+; Add change settings button
+MenuChangeSettingsText := "Change settings"
+Menu, Tray, Add, %MenuChangeSettingsText%, MenuHandler
+Menu, Tray, Default, %MenuChangeSettingsText%
+
+; Creates a separator line
+Menu, Tray, Add
+
+; Add option to reload the current script (in case changes were made)
+MenuReloadScriptText := "Restart"
+Menu, Tray, Add, %MenuReloadScriptText%, MenuHandler
+
+; Add option to exit the current script
+MenuExitScriptText := "Exit"
+Menu, Tray, Add, %MenuExitScriptText%, MenuHandler
 
 
 
 
 ShowAutoAlertSetup() {
+	Gui Destroy ; Cleanup existing GUIs
+	
 	Gui Font, s17 cBlack, Agency FB
 	Gui Add, Text, x15 y11 w120 h23 +0x200, AutoAlerts
 
-	Gui Font, s10, Verdana
-	Gui Add, Text, x15 y36 w535 h31 +0x200, You held right shift for three seconds....
+	Gui Font, s9, Verdana
+	Gui Add, Text, x15 y33 w535 h18 +0x200, You held right shift for three seconds....
 	Gui Add, Text, x16 y96 w408 h54 +0x200, How would you like to handle these alerts in the future?
 	
+	Gui Font, s10, Consolas
 	WinGetTitle, targetTitle, ahk_id %LastInitWinID%
 	Gui Add, Text, x15 y66 w535 h31 +0x200, Target: %targetTitle%
 
@@ -53,7 +78,6 @@ ShowAutoAlertSetup() {
 
 	Gui Show, w483 h254, AutoAlerts
 }
-
 
 ; Runs setup to configure automatic handling of a specified window
 ; Returns true if setup successfully and false if setup failed/was cancelled
@@ -219,4 +243,44 @@ GuiEscape:
 	return
 GuiClose:
 	Gui, Destroy
+	return
+
+
+; handler for setting being double clicked
+AutoAlertEntriesList:
+	if (A_GuiEvent = "DoubleClick")
+	{
+		if (A_EventInfo < 1) {
+			return
+		}
+		
+		sectionNamesArray := StrSplit(SettingsSectionNames, "`n")
+		sectionToDelete := sectionNamesArray[A_EventInfo]
+		IniRead, readableName, %SettingsName%, %sectionToDelete%, ReadableName, unnamed
+		MsgBox, 4, AutoAlerts, Are you sure you want to delete %readableName%?
+		
+		IfMsgBox No
+			return
+		
+		; Delete the section and reload the list view entries
+		IniDelete, %SettingsName%, %sectionToDelete%
+		Settings.LoadAutoAlertItems()
+	}
+	return
+
+
+
+
+MenuHandler:
+	if (A_ThisMenuItem = MenuReloadScriptText) {
+		Reload
+		return
+	} else if (A_ThisMenuItem = MenuExitScriptText) {
+		ExitApp
+	} else if (A_ThisMenuItem = MenuChangeSettingsText) {
+		Settings.Change()
+	} else if (A_ThisMenuItem = MenuAboutText) {
+		MsgBox,0, AutoAlerts Credits, Created by Freddie Chessell`, 2020
+	}
+
 	return
