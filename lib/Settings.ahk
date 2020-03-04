@@ -50,7 +50,7 @@ class Settings {
 		
 		return UserHasSections
 	}
-	
+
 	Change() {
 		GUI, Destroy ; Clear existing GUIs
 		
