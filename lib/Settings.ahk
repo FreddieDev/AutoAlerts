@@ -30,11 +30,10 @@ class Settings {
 		UserHasSections := false
 		Loop, Parse, SettingsSectionNames, `n, `r
 		{
-			UserHasSections := true
 			
 			IniRead, autoHandle, %SettingsName%, %A_LoopField%, AutoHandle, 0
 			if (!autoHandle) {
-				return ; Stop running if not enabled for window
+				Continue ; Stop running if not enabled for window
 			}
 			
 			IniRead, readableName, %SettingsName%, %A_LoopField%, ReadableName, unnamed
@@ -46,6 +45,8 @@ class Settings {
 			actionToClickStr := shouldDoAction ? actionToClick . " " : ""
 			
 			LV_Add("", SpacePadString(readableName . " "), SpacePadString(shouldDismissStr), SpacePadString(actionToClickStr))
+			
+			UserHasSections := true
 		}
 		
 		return UserHasSections
